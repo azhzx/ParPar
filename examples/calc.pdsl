@@ -1,0 +1,150 @@
+# PDSL demo
+
+lang "demo" -> FileAST
+
+FileAST 
+    stub []Stub
+
+Stub = Struct | Function
+
+Struct
+    name str
+    items []StructField
+
+StructField
+    name str
+    ty Ty
+
+Function
+    name str
+    params []Param
+    ret_ty Ty
+    body []Stmt
+
+Param
+    name str
+    ty Ty
+
+Stmt = Let | Return
+
+Let
+    name str
+    expr Expr
+
+Return
+    expr Expr
+
+Expr = If | Ident | Binary | Unary | Call
+BinaryKind = Or | And | Eq | Neq | Lt | Le | Gt | Ge | Add | Sub | Mul | Div | Mod
+UnaryKind = Not | Neg
+Binary
+    kind BinaryKind
+    lhs Expr
+    rhs Expr
+Unary
+    kind UnaryKind
+    rhs Expr
+
+Ty = Ident | Ref
+Ref
+    target Ty
+
+IfExpr
+    cond Expr
+    body Expr
+    else Expr
+
+operator_table = {
+#    txt  :  name  : infix/prefix/postfix : precedence : associativity
+# ---------------------------------------------------------------------
+    "||"  : Or     : infix                : 2          : left
+    "&&"  : And    : infix                : 3          : left
+    "=="  : Eq     : infix                : 5          : none
+    "!="  : Neq    : infix                : 5          : none
+    "<"   : Lt     : infix                : 6          : none
+    "<="  : Le     : infix                : 6          : none
+    ">"   : Gt     : infix                : 6          : none
+    ">="  : Ge     : infix                : 6          : none
+    "+"   : Add    : infix                : 10         : left
+    "-"   : Sub    : infix                : 10         : left
+    "*"   : Mul    : infix                : 20         : left
+    "/"   : Div    : infix                : 20         : left
+    "%"   : Mod    : infix                : 20         : left
+    "!"   : Not    : prefix               : 30         : none
+    "-"   : Neg    : prefix               : 30         : none
+    "()"  : Call   : postfix              : 40         : none
+}
+
+
+main
+    [stub]@s
+    ret FileAST @s
+
+stub?
+    peek
+      | `fn` : ret fn 
+      | `struct` : ret struct
+      | _ : None
+    
+
+
+struct
+    Parsing_unicode_indent@n `{`
+        [struct_field]@f
+    `}`;
+
+    ret Struct @n @f
+
+struct_field?
+    peekif unicode_indent
+        Parsing_unicode_indent@n `:` ty@t `;`
+
+        ret StructField @n @t
+
+fn
+    Parsing_unicode_indent@n  `(`  [param]@p  `)`  `->`  ty@r `{`
+        [stmt]@b
+    `}`
+
+    ret Function @n @p @r @b
+
+param?
+    peekif unicode_indent
+        Parsing_unicode_indent@n `:` ty@t `,`
+
+        ret Param @n @t
+
+stmt?
+    peek
+      | `let` : ret let 
+      | `return` : ret return
+      | _ : None
+
+let
+    `let` Parsing_unicode_indent@n `=` expr@e `;`
+    ret Let @n @e
+
+return
+    `return` expr@e
+    ret Return @e
+
+expr?
+    peek
+    | `if` : ret if
+    | unicode_indent@n : ret Ident @n
+    | _ : Parsing_by_operator_table
+
+if
+    expr@cond `?` expr@then `:` expr@else
+
+    ret If @cond @then @else
+
+
+ty
+    peek
+    | `&` :
+        ty@inner
+        ret Ref @inner
+    | unicode_indent :
+        Parsing_unicode_indent@n
+        ret Ty @n
